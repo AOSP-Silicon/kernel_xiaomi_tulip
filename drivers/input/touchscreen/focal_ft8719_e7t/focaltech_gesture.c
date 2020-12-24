@@ -232,7 +232,7 @@ static ssize_t double_tap_store(struct kobject *kobj,
 {
        int rc, val;
 
-       rc = kstrtoint(buf, 10, &val);
+       rc = sscanf(buf, "%u", &val);
        if (rc)
                return -EINVAL;
 
