@@ -142,3 +142,6 @@ Android.bp
 
 # Ignore object directory
 out/
+
+# KSU
+KernelSU/
