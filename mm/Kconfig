@@ -777,7 +777,7 @@ config ARCH_SUPPORTS_SPECULATIVE_PAGE_FAULT
 
 config SPECULATIVE_PAGE_FAULT
 	bool "Speculative page faults"
-	default y
+	default n
 	depends on ARCH_SUPPORTS_SPECULATIVE_PAGE_FAULT
 	depends on ARCH_HAS_PTE_SPECIAL && MMU && SMP
 	help
