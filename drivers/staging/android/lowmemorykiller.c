@@ -18,6 +18,7 @@
  * and processes may not get killed until the normal oom killer is triggered.
  *
  * Copyright (C) 2007-2008 Google, Inc.
+ * Copyright (C) 2019 XiaoMi, Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -42,11 +43,6 @@
 #include <linux/rcupdate.h>
 #include <linux/profile.h>
 #include <linux/notifier.h>
-#include <linux/mutex.h>
-#include <linux/delay.h>
-#include <linux/swap.h>
-#include <linux/fs.h>
-#include <linux/cpuset.h>
 #include <linux/vmpressure.h>
 #include <linux/zcache.h>
 #include <linux/circ_buf.h>
@@ -54,25 +50,16 @@
 #include <linux/slab.h>
 #include <linux/poll.h>
 
-#define CREATE_TRACE_POINTS
-#include <trace/events/almk.h>
+#define CONFIG_CONVERT_ADJ_TO_SCORE_ADJ
 
-#ifdef CONFIG_HIGHMEM
-#define _ZONE ZONE_HIGHMEM
-#else
-#define _ZONE ZONE_NORMAL
-#endif
-
-#define CREATE_TRACE_POINTS
-#include "trace/lowmemorykiller.h"
-
-static uint32_t lowmem_debug_level = 1;
+static u32 lowmem_debug_level = 1;
 static short lowmem_adj[6] = {
 	0,
 	1,
 	6,
 	12,
 };
+
 static int lowmem_adj_size = 4;
 static int lowmem_minfree[6] = {
 	3 * 512,	/* 6MB */
@@ -80,10 +67,12 @@ static int lowmem_minfree[6] = {
 	4 * 1024,	/* 16MB */
 	16 * 1024,	/* 64MB */
 };
+
 static int lowmem_minfree_size = 4;
-static int lmk_fast_run = 1;
 
 static unsigned long lowmem_deathpending_timeout;
+
+static bool kill_one_more;
 
 #define lowmem_print(level, x...)			\
 	do {						\
@@ -223,6 +212,21 @@ static void lmk_event_init(void)
 	entry = proc_create("lowmemorykiller", 0, NULL, &event_file_ops);
 	if (!entry)
 		pr_err("error creating kernel lmk event file\n");
+
+static bool test_tsk_lmk_waiting(struct task_struct *p)
+{
+	struct task_struct *t;
+
+	for_each_thread(p, t) {
+		task_lock(t);
+		if (unlikely(task_lmk_waiting(t))) {
+			task_unlock(t);
+			return true;
+		}
+		task_unlock(t);
+	}
+
+	return false;
 }
 
 static unsigned long lowmem_count(struct shrinker *s,
@@ -604,7 +608,6 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 	unsigned long rem = 0;
 	int tasksize;
 	int i;
-	int ret = 0;
 	short min_score_adj = OOM_SCORE_ADJ_MAX + 1;
 	int minfree = 0;
 #ifdef CONFIG_ANDROID_LOW_MEMORY_KILLER_CONSIDER_SWAP
@@ -613,24 +616,11 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 	int selected_tasksize = 0;
 	short selected_oom_score_adj;
 	int array_size = ARRAY_SIZE(lowmem_adj);
-	int other_free;
-	int other_file;
-
-	if (!mutex_trylock(&scan_mutex))
-		return 0;
-
-	other_free = global_page_state(NR_FREE_PAGES);
-
-	if (global_page_state(NR_SHMEM) + total_swapcache_pages() <
-		global_page_state(NR_FILE_PAGES) + zcache_pages())
-		other_file = global_page_state(NR_FILE_PAGES) + zcache_pages() -
+	int other_free = global_page_state(NR_FREE_PAGES) - totalreserve_pages;
+	int other_file = global_page_state(NR_FILE_PAGES) -
 						global_page_state(NR_SHMEM) -
 						global_page_state(NR_UNEVICTABLE) -
 						total_swapcache_pages();
-	else
-		other_file = 0;
-
-	tune_lmk_param(&other_free, &other_file, sc);
 
 	if (lowmem_adj_size < array_size)
 		array_size = lowmem_adj_size;
@@ -642,20 +632,17 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 		if (max_minfree < minfree)
 			max_minfree = minfree;
 #endif
-		if (other_free < minfree && other_file < minfree) {
+		if (other_free < minfree && other_file < (minfree + minfree / 4)) {
 			min_score_adj = lowmem_adj[i];
 			break;
 		}
 	}
 
-	ret = adjust_minadj(&min_score_adj);
-
 	lowmem_print(3, "lowmem_scan %lu, %x, ofree %d %d, ma %hd\n",
-			sc->nr_to_scan, sc->gfp_mask, other_free,
-			other_file, min_score_adj);
+		     sc->nr_to_scan, sc->gfp_mask, other_free,
+		     other_file, min_score_adj);
 
 	if (min_score_adj == OOM_SCORE_ADJ_MAX + 1) {
-		trace_almk_shrink(0, ret, other_free, other_file, 0);
 		lowmem_print(5, "lowmem_scan %lu, %x, return 0\n",
 			     sc->nr_to_scan, sc->gfp_mask);
 		mutex_unlock(&scan_mutex);
@@ -668,6 +655,7 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 	selected_oom_score_adj = min_score_adj;
 
 	rcu_read_lock();
+again:
 	for_each_process(tsk) {
 		struct task_struct *p;
 		short oom_score_adj;
@@ -675,16 +663,10 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 		if (tsk->flags & PF_KTHREAD)
 			continue;
 
-		/* if task no longer has any memory ignore it */
-		if (test_task_flag(tsk, TIF_MM_RELEASED))
+		if (test_tsk_lmk_waiting(tsk)) {
+			lowmem_print(2, "%s (%d) is already killed, skip\n",
+				tsk->comm, tsk->pid);
 			continue;
-
-		if (time_before_eq(jiffies, lowmem_deathpending_timeout)) {
-			if (test_task_flag(tsk, TIF_MEMDIE)) {
-				rcu_read_unlock();
-				mutex_unlock(&scan_mutex);
-				return 0;
-			}
 		}
 
 		p = find_lock_task_mm(tsk);
@@ -697,6 +679,9 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 			continue;
 		}
 		tasksize = get_mm_rss(p->mm);
+#ifdef CONFIG_ZRAM
+		tasksize += (get_mm_counter(p->mm, MM_SWAPENTS) / 3);
+#endif
 		task_unlock(p);
 		if (tasksize <= 0)
 			continue;
@@ -710,84 +695,44 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 		selected = p;
 		selected_tasksize = tasksize;
 		selected_oom_score_adj = oom_score_adj;
-		lowmem_print(3, "select '%s' (%d), adj %hd, size %d, to kill\n",
-			     p->comm, p->pid, oom_score_adj, tasksize);
+		lowmem_print(2, "select '%s' (%d, %d), adj %hd, size %d, to kill\n",
+			     p->comm, p->pid, p->tgid, oom_score_adj, tasksize);
 	}
 	if (selected) {
-		long cache_size, cache_limit, free;
-
-		if (test_task_flag(selected, TIF_MEMDIE) &&
-		    (test_task_state(selected, TASK_UNINTERRUPTIBLE))) {
-			lowmem_print(2, "'%s' (%d) is already killed\n",
-				     selected->comm,
-				     selected->pid);
-			rcu_read_unlock();
-			mutex_unlock(&scan_mutex);
-			return 0;
-		}
-
 		task_lock(selected);
 		get_task_struct(selected);
 		send_sig(SIGKILL, selected, 0);
-		/*
-		 * FIXME: lowmemorykiller shouldn't abuse global OOM killer
-		 * infrastructure. There is no real reason why the selected
-		 * task should have access to the memory reserves.
-		 */
 		if (selected->mm)
-			mark_oom_victim(selected);
+			task_set_lmk_waiting(selected);
 		task_unlock(selected);
-		cache_size = other_file * (long)(PAGE_SIZE / 1024);
-		cache_limit = minfree * (long)(PAGE_SIZE / 1024);
-		free = other_free * (long)(PAGE_SIZE / 1024);
-		trace_lowmemory_kill(selected, cache_size, cache_limit, free);
-		lowmem_print(1, "Killing '%s' (%d) (tgid %d), adj %hd,\n" \
-			        "   to free %ldkB on behalf of '%s' (%d) because\n" \
-			        "   cache %ldkB is below limit %ldkB for oom_score_adj %hd\n" \
-				"   Free memory is %ldkB above reserved.\n" \
-				"   Free CMA is %ldkB\n" \
-				"   Total reserve is %ldkB\n" \
-				"   Total free pages is %ldkB\n" \
-				"   Total file cache is %ldkB\n" \
-				"   Total zcache is %ldkB\n" \
-				"   GFP mask is 0x%x\n",
-			     selected->comm, selected->pid, selected->tgid,
+		lowmem_print(1, "Killing '%s' (%d), adj %hd,\n"
+				 "   to free %ldkB on behalf of '%s' (%d) because\n"
+				 "   cache %ldkB is below limit %ldkB for oom_score_adj %hd\n"
+				 "   Free memory is %ldkB above reserved\n",
+			     selected->comm, selected->pid,
 			     selected_oom_score_adj,
 			     selected_tasksize * (long)(PAGE_SIZE / 1024),
 			     current->comm, current->pid,
-			     cache_size, cache_limit,
+			     other_file * (long)(PAGE_SIZE / 1024),
+			     minfree * (long)(PAGE_SIZE / 1024),
 			     min_score_adj,
-			     free,
-			     global_page_state(NR_FREE_CMA_PAGES) *
-				(long)(PAGE_SIZE / 1024),
-			     totalreserve_pages * (long)(PAGE_SIZE / 1024),
-			     global_page_state(NR_FREE_PAGES) *
-				(long)(PAGE_SIZE / 1024),
-			     global_page_state(NR_FILE_PAGES) *
-				(long)(PAGE_SIZE / 1024),
-			     (long)zcache_pages() * (long)(PAGE_SIZE / 1024),
-			     sc->gfp_mask);
-
-		if (lowmem_debug_level >= 2 && selected_oom_score_adj == 0) {
-			show_mem(SHOW_MEM_FILTER_NODES);
-			dump_tasks(NULL, NULL);
-		}
-
+			     other_free * (long)(PAGE_SIZE / 1024));
 		lowmem_deathpending_timeout = jiffies + HZ;
 		rem += selected_tasksize;
-		rcu_read_unlock();
-		/* give the system time to free up the memory */
-		msleep_interruptible(20);
-		trace_almk_shrink(selected_tasksize, ret,
-				  other_free, other_file,
-				  selected_oom_score_adj);
-	} else {
-		trace_almk_shrink(1, ret, other_free, other_file, 0);
-		rcu_read_unlock();
+	}
+
+	if (kill_one_more) {
+		selected = NULL;
+		kill_one_more = false;
+		lowmem_print(1, "lowmem_scan kill one more process\n");
+		goto again;
 	}
 
 	lowmem_print(4, "lowmem_scan %lu, %x, return %lu\n",
 		     sc->nr_to_scan, sc->gfp_mask, rem);
+
+	rcu_read_unlock();
+
 	mutex_unlock(&scan_mutex);
 
 	if (selected) {
@@ -804,6 +749,36 @@ static struct shrinker lowmem_shrinker = {
 	.flags = SHRINKER_LMK
 };
 
+
+/*
+ * when vmpressure >= vmpressure_level_critical(95), we will kill one more process
+ */
+static int lmk_vmpressure_notifier(struct notifier_block *nb,
+			unsigned long action, void *data)
+{
+	unsigned long pressure = action;
+
+	if (pressure >= 95) {
+		if (!kill_one_more) {
+			kill_one_more = true;
+			lowmem_print(2, "vmpressure %ld, set kill_one_more true\n",
+				pressure);
+		}
+	} else {
+		if (kill_one_more) {
+			kill_one_more = false;
+			lowmem_print(2, "vmpressure %ld, set kill_one_more false\n",
+				pressure);
+		}
+	}
+
+	return 0;
+}
+
+static struct notifier_block lmk_vmpr_nb = {
+	.notifier_call = lmk_vmpressure_notifier,
+};
+
 static int __init lowmem_init(void)
 {
 	register_shrinker(&lowmem_shrinker);
@@ -813,7 +788,7 @@ static int __init lowmem_init(void)
 }
 device_initcall(lowmem_init);
 
-#ifdef CONFIG_ANDROID_LOW_MEMORY_KILLER_AUTODETECT_OOM_ADJ_VALUES
+#ifdef CONFIG_CONVERT_ADJ_TO_SCORE_ADJ
 static short lowmem_oom_adj_to_oom_score_adj(short oom_adj)
 {
 	if (oom_adj == OOM_ADJUST_MAX)
@@ -895,11 +870,11 @@ static const struct kparam_array __param_arr_adj = {
  * bootargs behaviour is to continue using module_param here.
  */
 module_param_named(cost, lowmem_shrinker.seeks, int, S_IRUGO | S_IWUSR);
-#ifdef CONFIG_ANDROID_LOW_MEMORY_KILLER_AUTODETECT_OOM_ADJ_VALUES
+#ifdef CONFIG_CONVERT_ADJ_TO_SCORE_ADJ
 module_param_cb(adj, &lowmem_adj_array_ops,
-		.arr = &__param_arr_adj,
-		S_IRUGO | S_IWUSR);
+		.arr = &__param_arr_adj, S_IRUGO | S_IWUSR);
 __MODULE_PARM_TYPE(adj, "array of short");
+
 #else
 module_param_array_named(adj, lowmem_adj, short, &lowmem_adj_size,
 			 S_IRUGO | S_IWUSR);
@@ -907,5 +882,4 @@ module_param_array_named(adj, lowmem_adj, short, &lowmem_adj_size,
 module_param_array_named(minfree, lowmem_minfree, uint, &lowmem_minfree_size,
 			 S_IRUGO | S_IWUSR);
 module_param_named(debug_level, lowmem_debug_level, uint, S_IRUGO | S_IWUSR);
-module_param_named(lmk_fast_run, lmk_fast_run, int, S_IRUGO | S_IWUSR);
 
