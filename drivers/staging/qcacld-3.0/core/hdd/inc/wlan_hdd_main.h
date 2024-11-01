@@ -4298,7 +4298,7 @@ static inline void hdd_reset_monitor_interface(struct hdd_adapter *sta_adapter)
 {
 }
 
-static inline int hdd_is_pkt_capture_mon_enable(struct hdd_adapter *adapter)
+static inline void int hdd_is_pkt_capture_mon_enable(struct hdd_adapter *adapter)
 {
 }
 #endif /* WLAN_FEATURE_PKT_CAPTURE */
