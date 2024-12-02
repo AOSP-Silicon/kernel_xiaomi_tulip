@@ -112,3 +112,8 @@ obj-$(CONFIG_TOUCHSCREEN_COMMON)	+= tp_common.o
 # HMI_L6653_A01
 obj-$(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_E7S)	+= synaptics_dsx_e7s/
 obj-$(CONFIG_TOUCHSCREEN_NVT_E7S) 	+= nvt_touch_e7s/
+
+obj-y   += lct_tp_fm_info.o
+obj-y   += lct_ctp_selftest.o
+obj-y   += lct_ctp_upgrade.o
+obj-y   += lct_if_ctp_upgrade.o
