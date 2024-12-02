@@ -3,7 +3,7 @@
  * FocalTech TouchScreen driver.
  *
  * Copyright (c) 2010-2017, Focaltech Ltd. All rights reserved.
- * Copyright (C) 2019 XiaoMi, Inc.
+ * Copyright (C) 2018 XiaoMi, Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -67,6 +67,10 @@
 #include <linux/ioctl.h>
 #include <linux/vmalloc.h>
 #include "focaltech_common.h"
+#if FTS_READ_TP_FW
+#include "../lct_tp_fm_info.h"
+#include "../lct_ctp_upgrade.h"
+#endif
 
 /*****************************************************************************
 * Private constant and macro definitions using #define
@@ -229,7 +233,7 @@ int fts_esdcheck_resume(void);
 int fts_test_init(struct i2c_client *client);
 int fts_test_exit(struct i2c_client *client);
 #endif
-int init_tp_selftest(struct i2c_client * client);
+int init_tp_selftest(struct i2c_client *client);
 
 
 /* Point Report Check*/

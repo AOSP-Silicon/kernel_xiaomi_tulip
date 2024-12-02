@@ -1,6 +1,6 @@
 /************************************************************************
 * Copyright (C) 2012-2018, Focaltech Systems (R)£¬All Rights Reserved.
-* Copyright (C) 2019 XiaoMi, Inc.
+ * Copyright (C) 2018 XiaoMi, Inc.
 *
 * File Name: focaltech_test.h
 *
@@ -36,13 +36,7 @@
 /*****************************************************************************
 * Macro definitions using #define
 *****************************************************************************/
-#ifdef CONFIG_MACH_XIAOMI_TULIP
-#define FTS_INI_FILE_PATH               "/system/etc/"
-#else
 #define FTS_INI_FILE_PATH               "/mnt/sdcard/"
-#endif
-
-
 #define FTS_TESTDATA_FILE_NAME          "testdata.csv"
 #define FTS_TESTRESULT_FILE_NAME        "testresult.txt"
 #define WRITE_BUF_SIZE              	512
@@ -405,7 +399,7 @@ int get_channel_num(void);
 
 #define FOCAL_TEST_DEBUG_EN     1
 #if (FOCAL_TEST_DEBUG_EN)
-#define FTS_TEST_DBG(fmt, args...) do {printk("[FTS] [TEST]%s. line: %d.  "fmt"\n",  __FUNCTION__, __LINE__, ##args);} while (0)
+#define FTS_TEST_DBG(fmt, args...) do {printk("[FTS] [TEST]%s. line: %d.  "fmt"\n",  __FUNCTION__, __LINE__, ##args); } while (0)
 #define FTS_TEST_FUNC_ENTER() printk("[FTS][TEST]%s: Enter(%d)\n", __func__, __LINE__)
 #define FTS_TEST_FUNC_EXIT()  printk("[FTS][TEST]%s: Exit(%d)\n", __func__, __LINE__)
 #else
@@ -414,8 +408,8 @@ int get_channel_num(void);
 #define FTS_TEST_FUNC_EXIT()
 #endif
 
-#define FTS_TEST_INFO(fmt, args...) do { printk(KERN_ERR "[FTS][TEST][Info]%s. line: %d.  "fmt"\n",  __FUNCTION__, __LINE__, ##args);} while (0)
-#define FTS_TEST_ERROR(fmt, args...) do { printk(KERN_ERR "[FTS][TEST][Error]%s. line: %d.  "fmt"\n",  __FUNCTION__, __LINE__, ##args);} while (0)
+#define FTS_TEST_INFO(fmt, args...) do { printk(KERN_ERR "[FTS][TEST][Info]%s. line: %d.  "fmt"\n",  __FUNCTION__, __LINE__, ##args); } while (0)
+#define FTS_TEST_ERROR(fmt, args...) do { printk(KERN_ERR "[FTS][TEST][Error]%s. line: %d.  "fmt"\n",  __FUNCTION__, __LINE__, ##args); } while (0)
 
 #define FTS_TEST_SAVE_INFO(fmt, args...)  do { \
     if (test_data.testresult) { \

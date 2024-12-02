@@ -3,7 +3,7 @@
  * FocalTech TouchScreen driver.
  *
  * Copyright (c) 2010-2017, FocalTech Systems, Ltd., all rights reserved.
- * Copyright (C) 2019 XiaoMi, Inc.
+ * Copyright (C) 2018 XiaoMi, Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -126,7 +126,7 @@
  * ESD check & protection
  * default: disable
  */
-#define FTS_ESDCHECK_EN                         1
+#define FTS_ESDCHECK_EN                         0
 
 /*
  * Production test enable
@@ -160,6 +160,11 @@
 * Read TP lockdown information
 */
 #define FTS_TP_LOCKDOWN_INFO                    1
+
+/*
+* Read TP FW information
+*/
+#define FTS_READ_TP_FW                       1    /* add tp-fw information by yangjiangzhu  2018/3/12 */
 
 /*
  * Pinctrl enable
