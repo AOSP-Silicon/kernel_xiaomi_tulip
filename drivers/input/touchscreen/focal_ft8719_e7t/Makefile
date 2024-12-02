@@ -14,3 +14,4 @@ obj-$(CONFIG_TOUCHSCREEN_FTS)   +=  focaltech_i2c.o
 obj-$(CONFIG_TOUCHSCREEN_FTS)   +=  focaltech_point_report_check.o
 obj-$(CONFIG_TOUCHSCREEN_FTS)   +=  focaltech_flash/
 obj-$(CONFIG_TOUCHSCREEN_FTS)   +=  focaltech_test/
+
