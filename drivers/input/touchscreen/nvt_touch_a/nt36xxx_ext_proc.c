@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2010 - 2017 Novatek, Inc.
- * Copyright (C) 2019 XiaoMi, Inc.
+ * Copyright (C) 2018 XiaoMi, Inc.
  *
  * $Revision: 20251 $
  * $Date: 2017-12-13 17:41:29 +0800 (周三, 13 十二月 2017) $
@@ -102,7 +102,7 @@ return:
 *******************************************************/
 uint8_t nvt_get_fw_pipe(void)
 {
-	uint8_t buf[8]= {0};
+	uint8_t buf[8] = {0};
 
 
 	buf[0] = 0xFF;
@@ -640,7 +640,7 @@ get_oem_data_retry:
 
 	for (i = 0; i < count_256; i++) {
 		cur_flash_addr = flash_address + i * 256;
-
+		// Step 4: Flash Read Command
 		buf[0] = 0x00;
 		buf[1] = 0x03;
 		buf[2] = ((cur_flash_addr >> 16) & 0xFF);
@@ -650,7 +650,7 @@ get_oem_data_retry:
 		buf[6] = 0xFF;
 		CTP_I2C_WRITE(ts->client, I2C_HW_Address, buf, 7);
 		msleep(10);
-
+		// Check 0xAA (Read Command)
 		buf[0] = 0x00;
 		buf[2] = 0x00;
 		CTP_I2C_READ(ts->client, I2C_HW_Address, buf, 2);
@@ -661,7 +661,7 @@ get_oem_data_retry:
 		}
 		msleep(10);
 
-
+		// Step 5: Read Data and Checksum
 		for (j = 0; j < ((256 / 32) + 1); j++) {
 			cur_sram_addr = ts->mmap->READ_FLASH_CHECKSUM_ADDR + j * 32;
 			buf[0] = 0xFF;
@@ -795,7 +795,7 @@ return:
 *******************************************************/
 int32_t nvt_extra_proc_init(void)
 {
-	NVT_proc_fw_version_entry = proc_create(NVT_FW_VERSION, 0444, NULL,&nvt_fw_version_fops);
+	NVT_proc_fw_version_entry = proc_create(NVT_FW_VERSION, 0444, NULL, &nvt_fw_version_fops);
 	if (NVT_proc_fw_version_entry == NULL) {
 		NVT_ERR("create proc/nvt_fw_version Failed!\n");
 		return -ENOMEM;
@@ -803,7 +803,7 @@ int32_t nvt_extra_proc_init(void)
 		NVT_LOG("create proc/nvt_fw_version Succeeded!\n");
 	}
 
-	NVT_proc_baseline_entry = proc_create(NVT_BASELINE, 0444, NULL,&nvt_baseline_fops);
+	NVT_proc_baseline_entry = proc_create(NVT_BASELINE, 0444, NULL, &nvt_baseline_fops);
 	if (NVT_proc_baseline_entry == NULL) {
 		NVT_ERR("create proc/nvt_baseline Failed!\n");
 		return -ENOMEM;
@@ -811,7 +811,7 @@ int32_t nvt_extra_proc_init(void)
 		NVT_LOG("create proc/nvt_baseline Succeeded!\n");
 	}
 
-	NVT_proc_raw_entry = proc_create(NVT_RAW, 0444, NULL,&nvt_raw_fops);
+	NVT_proc_raw_entry = proc_create(NVT_RAW, 0444, NULL, &nvt_raw_fops);
 	if (NVT_proc_raw_entry == NULL) {
 		NVT_ERR("create proc/nvt_raw Failed!\n");
 		return -ENOMEM;
@@ -819,7 +819,7 @@ int32_t nvt_extra_proc_init(void)
 		NVT_LOG("create proc/nvt_raw Succeeded!\n");
 	}
 
-	NVT_proc_diff_entry = proc_create(NVT_DIFF, 0444, NULL,&nvt_diff_fops);
+	NVT_proc_diff_entry = proc_create(NVT_DIFF, 0444, NULL, &nvt_diff_fops);
 	if (NVT_proc_diff_entry == NULL) {
 		NVT_ERR("create proc/nvt_diff Failed!\n");
 		return -ENOMEM;

@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2010 - 2017 Novatek, Inc.
- * Copyright (C) 2019 XiaoMi, Inc.
+ * Copyright (C) 2018 XiaoMi, Inc.
  *
  * $Revision: 23175 $
  * $Date: 2018-02-12 16:26:21 +0800 (周一, 12 二月 2018) $
@@ -41,13 +41,13 @@
 #include <linux/jiffies.h>
 #endif /* #if NVT_TOUCH_ESD_PROTECT */
 /* add tp vendor information by yangjiangzhu  2018/3/19 start */
-extern char g_lcd_id[128];  
+extern char g_lcd_id[128];
 /* add tp vendor information by yangjiangzhu  2018/3/19 end */
 
 #if NVT_TOUCH_ESD_PROTECT
 static struct delayed_work nvt_esd_check_work;
 static struct workqueue_struct *nvt_esd_check_wq;
-static unsigned long irq_timer = 0;
+static unsigned long irq_timer;
 uint8_t esd_check = false;
 uint8_t esd_retry = 0;
 uint8_t esd_retry_max = 5;
@@ -75,9 +75,6 @@ static int fb_notifier_callback(struct notifier_block *self, unsigned long event
 #elif defined(CONFIG_HAS_EARLYSUSPEND)
 static void nvt_ts_early_suspend(struct early_suspend *h);
 static void nvt_ts_late_resume(struct early_suspend *h);
-#endif
-#ifdef CONFIG_TOUCHSCREEN_COMMON
-#include <linux/input/tp_common.h>
 #endif
 
 #if TOUCH_KEY_NUM > 0
@@ -123,10 +120,10 @@ int nvt_gesture_switch(struct input_dev *dev, unsigned int type, unsigned int co
 			}
 		}
 		NVT_LOG("choose the gesture mode yes or not\n");
-		if(value == WAKEUP_OFF){
+		if (value == WAKEUP_OFF){
 			NVT_LOG("disable gesture mode\n");
 			enable_gesture_mode = false;
-		}else if(value == WAKEUP_ON){
+		}else if (value == WAKEUP_ON){
 			NVT_LOG("enable gesture mode\n");
 			enable_gesture_mode  = true;
 		}
@@ -134,36 +131,9 @@ int nvt_gesture_switch(struct input_dev *dev, unsigned int type, unsigned int co
 	return 0;
 }
 
-#ifdef CONFIG_TOUCHSCREEN_COMMON
-static ssize_t double_tap_show(struct kobject *kobj,
-			       struct kobj_attribute *attr, char *buf)
-{
-	return sprintf(buf, "%d\n", enable_gesture_mode);
-}
-
-static ssize_t double_tap_store(struct kobject *kobj,
-				struct kobj_attribute *attr, const char *buf,
-				size_t count)
-{
-	int rc, val;
-
-	rc = kstrtoint(buf, 10, &val);
-	if (rc)
-		return -EINVAL;
-
-	enable_gesture_mode = !!val;
-	return count;
-}
-
-static struct tp_common_ops double_tap_ops = {
-	.show = double_tap_show,
-	.store = double_tap_store
-};
 #endif
 
-#endif
-
-static uint8_t bTouchIsAwake = 0;
+static uint8_t bTouchIsAwake;
 
 /*******************************************************
 Description:
@@ -245,11 +215,11 @@ return:
 *******************************************************/
 void nvt_sw_reset_idle(void)
 {
-	uint8_t buf[4]={0};
+	uint8_t buf[4] = {0};
 
 
-	buf[0]=0x00;
-	buf[1]=0xA5;
+	buf[0] = 0x00;
+	buf[1] = 0xA5;
 	CTP_I2C_WRITE(ts->client, I2C_HW_Address, buf, 2);
 
 	msleep(15);
@@ -266,7 +236,7 @@ void nvt_bootloader_reset(void)
 {
 	uint8_t buf[8] = {0};
 
-
+	//---write i2c cmds to reset---
 	buf[0] = 0x00;
 	buf[1] = 0x69;
 	CTP_I2C_WRITE(ts->client, I2C_HW_Address, buf, 2);
@@ -374,7 +344,7 @@ int32_t nvt_check_fw_reset_state(RST_COMPLETE_STATE check_reset_state)
 	while (1) {
 		msleep(10);
 
-
+		//---read reset state---
 		buf[0] = EVENT_MAP_RESET_COMPLETE;
 		buf[1] = 0x00;
 		CTP_I2C_READ(ts->client, I2C_FW_Address, buf, 6);
@@ -385,7 +355,7 @@ int32_t nvt_check_fw_reset_state(RST_COMPLETE_STATE check_reset_state)
 		}
 
 		retry++;
-		if(unlikely(retry > 100)) {
+		if (unlikely(retry > 100)) {
 			NVT_ERR("error, retry=%d, buf[1]=0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X\n", retry, buf[1], buf[2], buf[3], buf[4], buf[5]);
 			ret = -1;
 			break;
@@ -440,6 +410,11 @@ int32_t nvt_get_fw_info(void)
 	uint8_t buf[64] = {0};
 	uint32_t retry_count = 0;
 	int32_t ret = 0;
+/* add tp-fw information by yangjiangzhu  2018/3/12 start */
+#if	NVT_READ_TP_FW
+	char fw_version[64];
+#endif
+/* add tp-fw information by yangjiangzhu  2018/3/12 end */
 
 info_retry:
 
@@ -468,7 +443,7 @@ info_retry:
 		ts->abs_y_max = TOUCH_DEFAULT_MAX_HEIGHT;
 		ts->max_button_num = TOUCH_KEY_NUM;
 
-		if(retry_count < 3) {
+		if (retry_count < 3) {
 			retry_count++;
 			NVT_ERR("retry_count=%d\n", retry_count);
 			goto info_retry;
@@ -482,7 +457,20 @@ info_retry:
 	} else {
 		ret = 0;
 	}
-	printk("yjz nvt_get_fw_info 1 \n");
+/* add tp-fw and vendor information by yangjiangzhu  2018/3/19 start */
+#if	NVT_READ_TP_FW
+		memset(fw_version, 0, sizeof(fw_version));
+		if (strstr(g_lcd_id, "shenchao nt36672a fhdplus video mode dsi panel") != NULL) {
+				sprintf(fw_version, "[FW]0x%02x,[IC]nvt36672_a", ts->fw_ver);
+				init_tp_fm_info(0, fw_version, "shenchao");
+			}
+			else {
+					sprintf(fw_version, "[FW]0x%02x,[IC]nvt36672_a", ts->fw_ver);
+					init_tp_fm_info(0, fw_version, "tianma");
+				 }
+#endif
+/* add tp-fw and vendor information by yangjiangzhu  2018/3/19 end */
+printk("yjz nvt_get_fw_info 1 \n");
 
 	nvt_read_pid();
 
@@ -633,7 +621,7 @@ return:
 *******************************************************/
 static int32_t nvt_flash_proc_init(void)
 {
-	NVT_proc_entry = proc_create(DEVICE_NAME, 0444, NULL,&nvt_flash_fops);
+	NVT_proc_entry = proc_create(DEVICE_NAME, 0444, NULL, &nvt_flash_fops);
 	if (NVT_proc_entry == NULL) {
 		NVT_ERR("Failed!\n");
 		return -ENOMEM;
@@ -848,7 +836,7 @@ static uint8_t nvt_fw_recovery(uint8_t *point_data)
 	uint8_t detected = true;
 
 	/* check pattern */
-	for (i=1 ; i<7 ; i++) {
+	for (i = 1 ; i < 7 ; i++) {
 		if (point_data[i] != 0x77) {
 			detected = false;
 			break;
@@ -1088,17 +1076,17 @@ void nvt_stop_crc_reboot(void)
 		for (retry = 5; retry > 0; retry--) {
 
 
-			buf[0]=0x00;
-			buf[1]=0xA5;
+			buf[0] = 0x00;
+			buf[1] = 0xA5;
 			CTP_I2C_WRITE(ts->client, I2C_HW_Address, buf, 2);
 
 
-			buf[0]=0x00;
-			buf[1]=0xA5;
+			buf[0] = 0x00;
+			buf[1] = 0xA5;
 			CTP_I2C_WRITE(ts->client, I2C_HW_Address, buf, 2);
 			msleep(1);
 
-
+			//---clear CRC_ERR_FLAG---
 			buf[0] = 0xFF;
 			buf[1] = 0x03;
 			buf[2] = 0xF1;
@@ -1353,18 +1341,11 @@ static int32_t nvt_ts_probe(struct i2c_client *client, const struct i2c_device_i
 #endif
 
 #if WAKEUP_GESTURE
-	ts->input_dev->event =nvt_gesture_switch;
+	ts->input_dev->event = nvt_gesture_switch;
 	for (retry = 0; retry < (sizeof(gesture_key_array) / sizeof(gesture_key_array[0])); retry++) {
 		input_set_capability(ts->input_dev, EV_KEY, gesture_key_array[retry]);
 	}
 	wake_lock_init(&gestrue_wakelock, WAKE_LOCK_SUSPEND, "poll-wake-lock");
-#ifdef CONFIG_TOUCHSCREEN_COMMON
-	ret = tp_common_set_double_tap_ops(&double_tap_ops);
-	if (ret < 0) {
-		NVT_ERR("%s: Failed to create double_tap node err=%d\n",
-			__func__, ret);
-	}
-#endif
 #endif
 
 	sprintf(ts->phys, "input/ts");
@@ -1445,7 +1426,7 @@ static int32_t nvt_ts_probe(struct i2c_client *client, const struct i2c_device_i
 #if defined(CONFIG_FB)
 	ts->fb_notif.notifier_call = fb_notifier_callback;
 	ret = fb_register_client(&ts->fb_notif);
-	if(ret) {
+	if (ret) {
 		NVT_ERR("register fb_notifier failed. ret=%d\n", ret);
 		goto err_register_fb_notif_failed;
 	}
@@ -1454,7 +1435,7 @@ static int32_t nvt_ts_probe(struct i2c_client *client, const struct i2c_device_i
 	ts->early_suspend.suspend = nvt_ts_early_suspend;
 	ts->early_suspend.resume = nvt_ts_late_resume;
 	ret = register_early_suspend(&ts->early_suspend);
-	if(ret) {
+	if (ret) {
 		NVT_ERR("register early suspend failed. ret=%d\n", ret);
 		goto err_register_early_suspend_failed;
 	}
