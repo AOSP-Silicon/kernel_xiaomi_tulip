@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2010 - 2017 Novatek, Inc.
- * Copyright (C) 2019 XiaoMi, Inc.
+ * Copyright (C) 2018 XiaoMi, Inc.
  *
  * $Revision: 22429 $
  * $Date: 2018-01-30 19:42:59 +0800 (周二, 30 一月 2018) $
@@ -27,8 +27,13 @@
 #endif
 
 #include "nt36xxx_mem_map.h"
+#define NVT_READ_TP_FW 		1   /* add tp-fw information by yangjiangzhu  2018/3/12 */
 
-#define NVT_DEBUG 0
+#if	NVT_READ_TP_FW
+#include "../lct_tp_fm_info.h"
+#include "../lct_ctp_upgrade.h"
+#endif
+#define NVT_DEBUG 1
 
 
 #define NVTTOUCH_RST_PIN 66
@@ -50,7 +55,7 @@
 #if NVT_DEBUG
 #define NVT_LOG(fmt, args...)    pr_err("[%s] %s %d: " fmt, NVT_I2C_NAME, __func__, __LINE__, ##args)
 #else
-#define NVT_LOG(fmt, args...)    pr_debug("[%s] %s %d: " fmt, NVT_I2C_NAME, __func__, __LINE__, ##args)
+#define NVT_LOG(fmt, args...)    pr_info("[%s] %s %d: " fmt, NVT_I2C_NAME, __func__, __LINE__, ##args)
 #endif
 #define NVT_ERR(fmt, args...)    pr_err("[%s] %s %d: " fmt, NVT_I2C_NAME, __func__, __LINE__, ##args)
 
