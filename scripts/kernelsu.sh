@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #
-# Copyright (C) 2023-2024 Unitrix Kernel
+# Copyright (C) 2023-2025 Unitrix Kernel
 #
 
 #
@@ -91,7 +91,7 @@ fi
 #
 # Add Non-GKI Support onwards v1.0.0
 #
-for release in "v1.0.0" "v1.0.1" "v1.0.2"; do
+for release in "v1.0.0" "v1.0.1" "v1.0.2" "v1.0.3"; do
 if [ $(git -C $KERNELSU describe --abbrev=0 --tags) = $release ]; then
     git -C $KERNELSU revert -n --no-gpg-sign 898e9d4f8ca9b2f46b0c6b36b80a872b5b88d899
 fi
