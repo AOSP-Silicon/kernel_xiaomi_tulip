@@ -1,5 +1,13 @@
 menu "KernelSU"
 
+config KERNELSU
+	bool "Enable KernelSU Support"
+	select OVERLAY_FS
+	select KSU
+	default n
+	help
+	Enable KSU support in kernel.
+
 config KSU
 	tristate "KernelSU function support"
 	depends on OVERLAY_FS
