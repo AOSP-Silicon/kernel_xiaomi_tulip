@@ -73,3 +73,10 @@ do_$action
 else
 do_older
 fi
+
+# Include ksu-next magic
+for release in "v1.0.2-R13"; do
+if [ $(git -C $KERNELSUNEXT describe --abbrev=0 --tags) = $release ]; then
+	git -C $KERNELSUNEXT merge -n --no-gpg-sign origin/magic
+fi
+done

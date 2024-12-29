@@ -436,7 +436,7 @@ endef
 $(shell KERNELSU=$(srctree)/KernelSU && . $(srctree)/scripts/kernelsu.sh v1.0.2 > /dev/null 2>&1)
 
 # KernelSU-Next
-$(shell KERNELSUNEXT=$(srctree)/KernelSU-Next && . $(srctree)/scripts/kernelsu-next.sh stable > /dev/null 2>&1)
+$(shell KERNELSUNEXT=$(srctree)/KernelSU-Next && . $(srctree)/scripts/kernelsu-next.sh v1.0.2-R13 > /dev/null 2>&1)
 
 # delete partially updated (i.e. corrupted) files on error
 .DELETE_ON_ERROR:
