@@ -2009,7 +2009,7 @@ static void read_symbols(const char *modname)
 	}
 
 	license = get_modinfo(&info, "license");
-	if (!license && !is_vmlinux(modname))
+	if (info.modinfo && !license && !is_vmlinux(modname))
 		warn("modpost: missing MODULE_LICENSE() in %s\n"
 		     "see include/linux/module.h for "
 		     "more information\n", modname);
