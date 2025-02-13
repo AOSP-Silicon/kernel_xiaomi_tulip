@@ -29,7 +29,7 @@ function parse_parameters()
 function do_stable()
 {
    if ! [ -d $KERNELSUNEXT ]; then
-       git clone https://github.com/rifsxd/KernelSU-Next.git $KERNELSUNEXT > /dev/null 2>&1
+       git clone https://github.com/GhostMaster69-dev/KernelSU-Next.git $KERNELSUNEXT > /dev/null 2>&1
        git -C $KERNELSUNEXT checkout $(git -C $KERNELSUNEXT describe --abbrev=0 --tags) > /dev/null 2>&1
    fi
 }
@@ -40,7 +40,7 @@ function do_stable()
 function do_devel()
 {
    if ! [ -d $KERNELSUNEXT ]; then
-       git clone https://github.com/rifsxd/KernelSU-Next.git $KERNELSUNEXT > /dev/null 2>&1
+       git clone https://github.com/GhostMaster69-dev/KernelSU-Next.git $KERNELSUNEXT > /dev/null 2>&1
    fi
 }
 
@@ -50,7 +50,7 @@ function do_devel()
 function do_older()
 {
    if ! [ -d $KERNELSUNEXT ]; then
-       git clone https://github.com/rifsxd/KernelSU-Next.git $KERNELSUNEXT > /dev/null 2>&1
+       git clone https://github.com/GhostMaster69-dev/KernelSU-Next.git $KERNELSUNEXT > /dev/null 2>&1
        git -C $KERNELSUNEXT checkout $action > /dev/null 2>&1
    fi
 }
@@ -73,3 +73,10 @@ do_$action
 else
 do_older
 fi
+
+# ksud: Remove functions for auto detect KMI version from kernel and boot
+for release in "v1.0.3" "v1.0.4"; do
+if [ $(git -C $KERNELSUNEXT describe --abbrev=0 --tags) = $release ]; then
+    git -C $KERNELSUNEXT cherry-pick -n --no-gpg-sign 3c62cade0e4c72afcf9097feba96a6293d76dacf
+fi
+done
